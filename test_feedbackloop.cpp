@@ -22,18 +22,10 @@ struct AudioEffect {
 // A dummy effect -- doing nothing
 struct DummyEffect : public AudioEffect {
 public:
-    void process(float *buf, size_t num) {
+    void process(float *buf, size_t num) override {
     }
 };
 
-void read_wav(std::istream & istream) {
-    const std::string riffTag="RIFF";
-    const std::string wavTag ="WAVE";
-
-    char buff0[riffTag.length()];
-    char buff1[wavTag.length()];
-
-}
 
 // Implement a function that checks if there is a feedback loop
 // in the effects chain.
@@ -43,7 +35,7 @@ void read_wav(std::istream & istream) {
 //
 // Compelexity should be O(N)* O(log(N/2))
 
-bool detect_feedback(AudioEffect * pStart,size_t &n)
+bool detect_feedback(AudioEffect * pEffect,int &n)
 {
     // std::set of pointers. Traverse through the chain
     // and check wether we have seen the current pointer already
@@ -52,16 +44,15 @@ bool detect_feedback(AudioEffect * pStart,size_t &n)
 
     n = 0;
     // Loop until end-of-chain or a loop back is detected
-    while(pStart != nullptr && pStart->next.get()!=nullptr) {
-        // add the current position to the set
-        ptrSet.insert(pStart);
-
+    while(pEffect != nullptr) {
         // have we seen the position already ?
-        if(ptrSet.find(pStart->next.get())!=ptrSet.end()) {
+        if(ptrSet.find(pEffect) != ptrSet.end()) {
             n = ptrSet.size();
             return true;
         }
-        pStart = pStart->next.get();
+        // add the current position to the set
+        ptrSet.insert(pEffect);
+        pEffect = pEffect->next.get();
     }
     n = ptrSet.size();
     return false;
@@ -76,6 +67,9 @@ bool detect_feedback(AudioEffect * pStart,size_t &n)
 
 void test_detect_feedback(size_t num)
 {
+    int nn;
+    std::shared_ptr<AudioEffect> sp(new DummyEffect());
+
     static const size_t L = 1000; // Random length of chain
     static const size_t R = 2; // Probability of inserting nullptr or loopback at the end 1/R
 
@@ -86,12 +80,17 @@ void test_detect_feedback(size_t num)
     std::uniform_int_distribution<> distr_length(0, L-1);
 
     // Random number 0<=r<R How often do we terminate o a loop (1/R)
-    std::uniform_int_distribution<> distr_loop(0, R-1);
+    std::uniform_int_distribution<> distr_do_loop(0, R-1);
+
+    // Scaled version of the trandom loop back position
+    std::uniform_real_distribution<> distr_loop_idx(0, 1.0);
 
     size_t hitnum = 0;
     size_t lengthsum =0;
     int minLength = -1;
     int maxLength = -1;
+
+    int loop_position = 0;
 
     for(int i=0;i<num;i++) {
         std::shared_ptr<AudioEffect> loop;
@@ -100,42 +99,55 @@ void test_detect_feedback(size_t num)
 
         int randlength = distr_length(randeng);
 
-        std::uniform_int_distribution<> distr_idx(0, randlength-1);
 
         // Select a position within the chain as the potential loop back position
-        int loopback_position = distr_idx(randeng);
+        loop_position = distr_loop_idx(randeng) * (randlength-1);
 
         // Generate a chain of random length. Select one random node the the loopback target
+
         for(int j=0;j<randlength;j++)
         {
             current->reset(new DummyEffect());
-            if(i == loopback_position)
+            // We pick one by random for a loop
+            if(j == loop_position)
             {
                 loop = *current;
             }
             current = &current->get()->next;
         }
+
         // Either terminate with loopback or simply leave
-        if(distr_loop(randeng) == 0)
+        bool haveLoop = randlength>0 && distr_do_loop(randeng) == 0;
+        if(haveLoop)
         {
             *current = loop;
         }
 
-        size_t n = 0;
+        int n = 0;
         bool hit = 0;
-        std::cout << std::setw(6) << i << ":" << (hit=detect_feedback(root.get(),n)) << ":" << n << "/" << randlength
+
+        std::cout << std::string(40,' ') << "\r" << std::setw(6) << i << ":"
+                  << std::setw(6) << loop_position << ":"
+                  << haveLoop << ":" << (hit=detect_feedback(root.get(),n)) << ":" << n << "/" << randlength
                   << "\r"
                   << std::flush;
 
         if(n!=randlength)
         {
             std::stringstream ss;
-            ss << " Expected chain length " << randlength << " found " << n;
+            ss << " Expected "  << " chain length " << randlength << " found " << n;
             throw std::runtime_error(ss.str());
         }
 
-        minLength = minLength == -1 || n < minLength ? n : minLength;
-        maxLength = minLength == -1 || n > maxLength ? n : maxLength;
+        if(hit!=haveLoop)
+        {
+            std::stringstream ss;
+            ss << " Expected " << (haveLoop ? "" : " no " ) << "loop detection ";
+            throw std::runtime_error(ss.str());
+        }
+
+        minLength = minLength == -1 || int(n) < minLength ? int(n) : minLength;
+        maxLength = minLength == -1 || int(n) > maxLength ? int(n) : maxLength;
 
         if(hit)
         {
@@ -144,6 +156,7 @@ void test_detect_feedback(size_t num)
 
         lengthsum += n;
     }
+
     std::cout << std::endl << "Statistics:" << num << " tests "
               << " chain length " << minLength << "/" << float(lengthsum)/num << "/" << maxLength << " min/avg/max"
               << " hits " << hitnum << "/" << std::fixed << float(hitnum)/num << " abs/%" << std::endl;
