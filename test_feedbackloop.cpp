@@ -77,7 +77,7 @@ void test_detect_feedback(size_t num)
     std::mt19937 randeng(randdev());
 
     // Random index 0<=idx<L
-    std::uniform_int_distribution<> distr_length(0, L-1);
+    std::uniform_int_distribution<> distr_length(0, L);
 
     // Random number 0<=r<R How often do we terminate o a loop (1/R)
     std::uniform_int_distribution<> distr_do_loop(0, R-1);
@@ -126,14 +126,16 @@ void test_detect_feedback(size_t num)
         int n = 0;
         bool hit = 0;
 
-        std::cout << std::string(40,' ') << "\r" << std::setw(6) << i << ":"
+        std::stringstream ss;
+
+        ss << std::setw(6) << i << ":"
                   << std::setw(6) << loop_position << ":"
-                  << haveLoop << ":" << (hit=detect_feedback(root.get(),n)) << ":" << n << "/" << randlength
-                  << "\r"
-                  << std::flush;
+                  << haveLoop << ":"
+                  << (hit=detect_feedback(root.get(),n)) << ":" << n << "/" << randlength;
 
         if(n!=randlength)
         {
+            std::cerr << std::endl << " !! " << ss.str() << std::endl;
             std::stringstream ss;
             ss << " Expected "  << " chain length " << randlength << " found " << n;
             throw std::runtime_error(ss.str());
@@ -141,6 +143,7 @@ void test_detect_feedback(size_t num)
 
         if(hit!=haveLoop)
         {
+            std::cerr << std::endl << " !! " << ss.str() << std::endl;
             std::stringstream ss;
             ss << " Expected " << (haveLoop ? "" : " no " ) << "loop detection ";
             throw std::runtime_error(ss.str());
@@ -155,6 +158,11 @@ void test_detect_feedback(size_t num)
         }
 
         lengthsum += n;
+
+        if(i % 100 == 0)
+        {
+            std::cout << std::string(40,' ') << "\r" << ss.str() << std::flush;
+        }
     }
 
     std::cout << std::endl << "Statistics:" << num << " tests "
