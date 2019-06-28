@@ -190,6 +190,5 @@ int main(int argc, char **argv)
             ::exit(2);
         }
     }
-
     test_detect_feedback(num);
 }
