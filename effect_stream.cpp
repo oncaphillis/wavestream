@@ -36,6 +36,17 @@ class AudioFilter : public AudioSource,public AudioSink
 protected:
 };
 
+class WavPcmSink : public AudioSink
+{
+private:
+public:
+    WavPcmSink(std::ostream & os)
+    {
+        os.seekp(0,std::ios_base::seekdir)
+    }
+private:
+};
+
 class WavPcmSource : public AudioSource
 {
 public:
@@ -177,7 +188,6 @@ private:
 };
 
 const uint8_t * WavPcmSource::_dummyRef;
-
 
 const std::string fn = "/usr/share/sounds/speech-dispatcher/pipe.wav";
 
