@@ -212,7 +212,7 @@ public:
 
         if(!_is)
         {
-            _to.finish();
+			_to.finish();
             return false;
         }
 
@@ -223,6 +223,7 @@ public:
             _to.finish();
             return false;
         }
+		
 
         if(_is.gcount() % (_frameSize) != 0 )
         {
@@ -433,30 +434,40 @@ private:
 
 uint8_t * WavPcmWriteJob::_dummy;
 
-int main(int argc, char **argv) {
-    std::istream * is=&std::cin;
-
-    std::ifstream fi;
-
-    if(argc==2)
+int main(int argc, char **argv)
+{
+    if(argc!=2)
     {
-        fi.open(argv[1]);
-        is = &fi;
+        std::cerr << "Usage: wavefilter audio.wav" << std::endl;
+        exit(1);
     }
 
+	std::ifstream fi;
+    fi.open(argv[1],std::ios::binary);
+
+    // Data queue frok file to split-job
     JobQueue read_q;
+
+    // left output queue for split-job
     JobQueue left_q;
+
+    // right output queue for split-job
     JobQueue right_q;
 
     JobPool jp;
-    JobPool::jobptr_t read_j  = JobPool::jobptr_t(new WavPcmReadJob(*is,read_q));
+
+    // Pool of jobs read->split->write
+    JobPool::jobptr_t read_j  = JobPool::jobptr_t(new WavPcmReadJob(fi,read_q));
     JobPool::jobptr_t split_j = JobPool::jobptr_t(new SplitJob(read_q,left_q,right_q));
     JobPool::jobptr_t left_j = JobPool::jobptr_t(new WavPcmWriteJob("left.wav",left_q));
     JobPool::jobptr_t right_j = JobPool::jobptr_t(new WavPcmWriteJob("right.wav",right_q));
 
+    // Add jobs ti pool
     jp.addJobs({read_j,split_j,left_j,right_j});
 
+    // start the bool
     jp.start();
 
+    // pool waits for all threads in destructor
     return 0;
 }
